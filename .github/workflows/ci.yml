@@ -1,6 +1,21 @@
 name: CI
 
 on:
+  workflow_dispatch:
+    inputs:
+      leg:
+        description: "baseline (uninstrumented) or instrumented (under chalk/curiosity)"
+        type: choice
+        options: [instrumented, baseline]
+        default: instrumented
+      profile:
+        description: "CrashOverride chalk profile"
+        type: string
+        default: curiosity-tests-racecar
+      racecar_run:
+        description: "racecar correlation token, echoed into the run name"
+        type: string
+        default: ""
   release:
     types: [published]
   pull_request:
@@ -18,15 +33,21 @@ on:
 concurrency:
   # merge_group runs group by the merge-group ref so a recreated group cancels the stale run;
   # push/release runs group by run_id on purpose (never cancel a deploy in progress)
-  group: ${{ github.workflow }}-${{ github.head_ref || (github.event_name == 'merge_group' && github.ref) || github.run_id }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.head_ref || (github.event_name == 'merge_group' && github.ref) || github.run_id }}-${{ inputs.leg || 'push' }}-${{ inputs.racecar_run }}
+  cancel-in-progress: false
 
 env:
+  # The one variable that separates the arms: on baseline, action-checkout
+  # skips its Set up Chalk step entirely.
+  CHALK_ON: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
   TOOL_NODE_FLAGS: ${{ vars.TOOL_NODE_FLAGS }}
 
 permissions:
   contents: read
   actions: read
+  id-token: write
+
+run-name: "CI ${{ inputs.leg || 'push' }} ${{ inputs.racecar_run }}"
 
 jobs:
   release-versions:
@@ -35,6 +56,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      id-token: write
     outputs:
       release: ${{ steps.by-tag.outputs.release }}
       latest-release: ${{ steps.latest.outputs.latest-release }}
@@ -61,13 +83,24 @@ jobs:
           echo "github.event_name: ${{ github.event_name }}"
           cat "$GITHUB_EVENT_PATH"
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
         # with:
         #   sparse-checkout: |
         #     package.json
         #     .tool-versions
         #   sparse-checkout-cone-mode: false
         #   ref: ${{ github.ref }}
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - id: source
         run: |
@@ -196,6 +229,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
     permissions:
       checks: read
+      contents: read
+      id-token: write
     outputs:
       skip-tests: ${{ steps.check.outputs.skip-tests }}
     steps:
@@ -229,12 +264,22 @@ jobs:
     needs: [release-versions]
     if: github.event_name == 'release'
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
         with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
           sparse-checkout: |
             package.json
           sparse-checkout-cone-mode: false
           ref: ${{ github.ref }}
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Register release on cloud as Draft
         if: github.event_name == 'release'
@@ -293,8 +338,19 @@ jobs:
         with:
           swap-size-gb: 4
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
         if: steps.packages-cache-build.outputs.cache-hit != 'true'
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Setup NodeJS
         id: setup-node-packages
@@ -369,7 +425,18 @@ jobs:
           - type: ${{ (github.event_name != 'release' && github.ref != 'refs/heads/develop') && 'production' || '' }}
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - uses: ./.github/actions/meteor-build
         with:
@@ -414,7 +481,18 @@ jobs:
             type: coverage
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - uses: ./.github/actions/restore-packages
 
@@ -497,14 +575,24 @@ jobs:
       LOWERCASE_REPOSITORY: ${{ needs.release-versions.outputs.lowercase-repo }}
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
         if: github.actor != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'release' || github.ref == 'refs/heads/develop')
         with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
           sparse-checkout: |
             docker-compose-ci.yml
             docker-compose-ci.fips.yml
           sparse-checkout-cone-mode: false
           ref: ${{ github.ref }}
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Login to GitHub Container Registry
         if: github.actor != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'release' || github.ref == 'refs/heads/develop')
@@ -570,9 +658,21 @@ jobs:
     permissions:
       pull-requests: write
       contents: write
+      id-token: write
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Track Docker image sizes
         uses: ./.github/actions/docker-image-size-tracker
@@ -594,7 +694,18 @@ jobs:
     env:
       ACTIONLINT_VERSION: 1.7.12
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Get actionlint
         shell: bash
@@ -621,6 +732,8 @@ jobs:
     name: 🔎 Code Check
     uses: ./.github/workflows/ci-code-check.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       node-version: ${{ needs.release-versions.outputs.node-version }}
       deno-version: ${{ needs.release-versions.outputs.deno-version }}
 
@@ -631,6 +744,8 @@ jobs:
 
     uses: ./.github/workflows/ci-test-storybook.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       node-version: ${{ needs.release-versions.outputs.node-version }}
       deno-version: ${{ needs.release-versions.outputs.deno-version }}
     secrets:
@@ -643,6 +758,8 @@ jobs:
 
     uses: ./.github/workflows/ci-test-unit.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       node-version: ${{ needs.release-versions.outputs.node-version }}
       deno-version: ${{ needs.release-versions.outputs.deno-version }}
       enterprise-license: ${{ needs.release-versions.outputs.enterprise-license }}
@@ -655,6 +772,8 @@ jobs:
 
     uses: ./.github/workflows/ci-test-e2e.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       type: api
       release: ce
       node-version: ${{ needs.release-versions.outputs.node-version }}
@@ -672,6 +791,8 @@ jobs:
 
     uses: ./.github/workflows/ci-test-e2e.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       type: api-livechat
       release: ce
       node-version: ${{ needs.release-versions.outputs.node-version }}
@@ -689,6 +810,8 @@ jobs:
 
     uses: ./.github/workflows/ci-test-e2e.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       type: ui
       release: ce
       transporter: 'nats://nats:4222'
@@ -715,6 +838,8 @@ jobs:
 
     uses: ./.github/workflows/ci-test-e2e.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       type: api
       release: ee
       transporter: 'nats://nats:4222'
@@ -736,6 +861,8 @@ jobs:
 
     uses: ./.github/workflows/ci-test-e2e.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       type: api-livechat
       release: ee
       transporter: 'nats://nats:4222'
@@ -757,6 +884,8 @@ jobs:
 
     uses: ./.github/workflows/ci-test-e2e.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       type: api-apps-deno
       release: ee
       transporter: 'nats://nats:4222'
@@ -778,6 +907,8 @@ jobs:
 
     uses: ./.github/workflows/ci-test-e2e.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       type: ui
       release: ee
       transporter: 'nats://nats:4222'
@@ -808,6 +939,8 @@ jobs:
 
     uses: ./.github/workflows/ci-test-e2e.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       type: api
       release: ee
       fips: true
@@ -830,6 +963,8 @@ jobs:
 
     uses: ./.github/workflows/ci-test-e2e.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       type: api-livechat
       release: ee
       fips: true
@@ -852,6 +987,8 @@ jobs:
     needs: [checks, build-gh-docker-publish, release-versions]
     uses: ./.github/workflows/ci-test-e2e.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       type: ui
       release: ee
       fips: true
@@ -880,7 +1017,18 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Setup NodeJS
         uses: ./.github/actions/setup-node
@@ -975,7 +1123,18 @@ jobs:
     needs: [release-versions, test-api-ee, test-api-livechat-ee, test-ui-ee]
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Use Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -1097,12 +1256,22 @@ jobs:
     needs: [build-gh-docker-publish, release-versions]
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
         with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
           sparse-checkout: |
             package.json
           sparse-checkout-cone-mode: false
           ref: ${{ github.ref }}
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Restore build
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1152,13 +1321,23 @@ jobs:
       LOWERCASE_REPOSITORY: ${{ needs.release-versions.outputs.lowercase-repo }}
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
         with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
           sparse-checkout: |
             docker-compose-ci.yml
             docker-compose-ci.fips.yml
           sparse-checkout-cone-mode: false
           ref: ${{ github.ref }}
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Login to DockerHub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -1278,12 +1457,22 @@ jobs:
       - docker-image-publish
       - release-versions
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
         with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
           sparse-checkout: |
             package.json
           sparse-checkout-cone-mode: false
           ref: ${{ github.ref }}
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Releases service
         env:
@@ -1326,6 +1515,8 @@ jobs:
 
     uses: ./.github/workflows/update-version-durability.yml
     with:
+      chalk_on: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+      profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
       LTS_VERSIONS: ${{ vars.LTS_VERSIONS }}
     secrets:
       CI_PAT: ${{ secrets.CI_PAT }}

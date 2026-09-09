@@ -569,6 +569,9 @@ jobs:
           setup-docker: false
 
   build-gh-docker-publish:
+    # racecar: skipped on dispatch — docker registry login has no credentials on a fork (Username and password required)
+    # Structural, not a weakened build: guarded here, untouched for push/PR.
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     name: 🚢 Publish Docker Images (ghcr.io)
     needs: [build-gh-docker, release-versions]
     runs-on: ubuntu-24.04-arm

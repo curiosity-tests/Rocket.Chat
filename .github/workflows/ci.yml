@@ -446,6 +446,9 @@ jobs:
           type: ${{ matrix.type }}
 
   build-gh-docker:
+    # racecar: skipped on dispatch — docker registry login has no credentials on a fork (Username and password required)
+    # Structural, not a weakened build: guarded here, untouched for push/PR.
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     name: 🚢 Build Docker
     needs: [build, release-versions]
     runs-on: ubuntu-24.04${{ matrix.arch == 'arm64' && '-arm' || '' }}

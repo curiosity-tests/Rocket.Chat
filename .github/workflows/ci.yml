@@ -20,15 +20,15 @@ on:
     types: [published]
   pull_request:
     branches:
-      - '**'
+    - '**'
     paths-ignore:
-      - '**.md'
+    - '**.md'
   merge_group:
   push:
     branches:
-      - develop
+    - develop
     paths-ignore:
-      - '**.md'
+    - '**.md'
 
 concurrency:
   # merge_group runs group by the merge-group ref so a recreated group cancels the stale run;
@@ -73,109 +73,103 @@ jobs:
       # to avoid this, we are using a dummy license, expiring at 2027-07-01
       enterprise-license: MK+bpK5NveUuNlWGaQXGoy+8b74Luet82M3ZGcBB8b5P9Y+m67NEtpW64dc1d5lEWi6d0nFjCjtCMneVD7bKxodz/Cml8URKEo5P7cQb/9wmeT0MzAhYNaRFZlIGkZ3ITF59pDV2u4HZuosEDJikVRwnaJ5ZoU/pOsHSPUPhTyGNIqLeKynODtUpfwDdIKEmHxpf2yVkKjgRiIJmbWjM6A4k+MNNYXWVXHzye7GggqWVg/ZcT7nKU1CCadpLhTJiIrgrrPzil1G5DQ4xnLs3Q2tu2dILSDiW5OYw/ywu2yCMicTjMq4MLL5SXDQJj6WoJzZ54HosbvsDzOXvsdC9gI1CjhPL2uRuvC8XLrzn3vL2UgXnifzD1VrLTtdZ+aSADveqtlzYlRWtqoUFBbNw8o+YVHdhbZGR0beMoAyRbHi5EMpxpad3L+NyztUIT/Uh/IjQ/C2SQZ6jB0GKPBOPxFLN56FNhTGrffLFR++TVoBu0Iquc7kajWkNit3bVbZvbx+oFcVW2PcjQ/+i2jpJjbgtUFUKrTKxGMAXTWoDzIQQ35zNzGAy268IM4Ymp5JmsVEnBOEUkbF9yx6fzkO6xZhpsHf0muklnW0kA+Tlore/TUrBWh1/RwWlQeZlxM5NyWoRM5onQmr/k/4BmObtL1Hpmbk8oMG29z89xtE9y/4=
     steps:
-      - name: Github Info
-        run: |
-          echo "GITHUB_ACTION: $GITHUB_ACTION"
-          echo "GITHUB_ACTOR: $GITHUB_ACTOR"
-          echo "GITHUB_REF: $GITHUB_REF"
-          echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
-          echo "GITHUB_BASE_REF: $GITHUB_BASE_REF"
-          echo "'push': ${{ 'push' }}"
-          cat "$GITHUB_EVENT_PATH"
+    - name: Github Info
+      run: |
+        echo "GITHUB_ACTION: $GITHUB_ACTION"
+        echo "GITHUB_ACTOR: $GITHUB_ACTOR"
+        echo "GITHUB_REF: $GITHUB_REF"
+        echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
+        echo "GITHUB_BASE_REF: $GITHUB_BASE_REF"
+        echo "'push': ${{ 'push' }}"
+        cat "$GITHUB_EVENT_PATH"
 
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
         # with:
         #   sparse-checkout: |
         #     package.json
         #     .tool-versions
         #   sparse-checkout-cone-mode: false
         #   ref: ${{ github.ref }}
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+    - id: source
+      run: |
+        ls -la
 
-      - id: source
-        run: |
-          ls -la
+        tar -cf /tmp/RocketChat-source.tar \
+          --sort=name \
+          --owner=0 --group=0 \
+          --mtime='1970-01-01' \
+          --exclude='.github' \
+          --exclude='.git' \
+          .
 
-          tar -cf /tmp/RocketChat-source.tar \
-            --sort=name \
-            --owner=0 --group=0 \
-            --mtime='1970-01-01' \
-            --exclude='.github' \
-            --exclude='.git' \
-            .
+        SOURCE_HASH=$(sha256sum /tmp/RocketChat-source.tar | awk '{ print $1 }')-v9
 
-          SOURCE_HASH=$(sha256sum /tmp/RocketChat-source.tar | awk '{ print $1 }')-v9
+        # Uncomment the following line to include the run ID in the hash and disable caching between runs
+        # SOURCE_HASH=$(sha256sum /tmp/RocketChat-source.tar | awk '{ print $1 }')-${{ github.run_id }}
 
-          # Uncomment the following line to include the run ID in the hash and disable caching between runs
-          # SOURCE_HASH=$(sha256sum /tmp/RocketChat-source.tar | awk '{ print $1 }')-${{ github.run_id }}
+        echo "hash=${SOURCE_HASH}"
 
-          echo "hash=${SOURCE_HASH}"
+        echo "hash=${SOURCE_HASH}" >> "$GITHUB_OUTPUT"
 
-          echo "hash=${SOURCE_HASH}" >> "$GITHUB_OUTPUT"
+    - id: var
+      run: |
+        LOWERCASE_REPOSITORY=$(echo "${{ github.repository_owner }}" | tr "[:upper:]" "[:lower:]")
 
-      - id: var
-        run: |
-          LOWERCASE_REPOSITORY=$(echo "${{ github.repository_owner }}" | tr "[:upper:]" "[:lower:]")
+        echo "LOWERCASE_REPOSITORY: ${LOWERCASE_REPOSITORY}"
+        echo "lowercase-repo=${LOWERCASE_REPOSITORY}" >> "$GITHUB_OUTPUT"
 
-          echo "LOWERCASE_REPOSITORY: ${LOWERCASE_REPOSITORY}"
-          echo "lowercase-repo=${LOWERCASE_REPOSITORY}" >> "$GITHUB_OUTPUT"
+        NODE_VERSION=$(node -p "require('./package.json').engines.node")
+        echo "NODE_VERSION: ${NODE_VERSION}"
+        echo "node-version=${NODE_VERSION}" >> "$GITHUB_OUTPUT"
 
-          NODE_VERSION=$(node -p "require('./package.json').engines.node")
-          echo "NODE_VERSION: ${NODE_VERSION}"
-          echo "node-version=${NODE_VERSION}" >> "$GITHUB_OUTPUT"
+        DENO_VERSION=$(awk '$1=="deno"{ print $2 }' .tool-versions)
+        echo "DENO_VERSION: ${DENO_VERSION}"
+        echo "deno-version=${DENO_VERSION}" >> "$GITHUB_OUTPUT"
 
-          DENO_VERSION=$(awk '$1=="deno"{ print $2 }' .tool-versions)
-          echo "DENO_VERSION: ${DENO_VERSION}"
-          echo "deno-version=${DENO_VERSION}" >> "$GITHUB_OUTPUT"
+    - id: ci-cache-keys
+      run: |
+        set -euo pipefail
+        PACKAGES_HASH=$(cat yarn.lock .yarnrc.yml package.json turbo.json | sha256sum | awk '{print $1}')
+        echo "packages-build-cache-key=${PACKAGES_HASH}" >> "$GITHUB_OUTPUT"
+        METEOR_HASH=$(git archive HEAD apps/meteor | sha256sum | awk '{print $1}')
+        echo "meteor-rc-cache-key=${METEOR_HASH}" >> "$GITHUB_OUTPUT"
 
-      - id: ci-cache-keys
-        run: |
-          set -euo pipefail
-          PACKAGES_HASH=$(cat yarn.lock .yarnrc.yml package.json turbo.json | sha256sum | awk '{print $1}')
-          echo "packages-build-cache-key=${PACKAGES_HASH}" >> "$GITHUB_OUTPUT"
-          METEOR_HASH=$(git archive HEAD apps/meteor | sha256sum | awk '{print $1}')
-          echo "meteor-rc-cache-key=${METEOR_HASH}" >> "$GITHUB_OUTPUT"
+    - id: by-tag
+      run: |
+        if echo "$GITHUB_REF_NAME" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ; then
+          RELEASE="latest"
+        elif echo "$GITHUB_REF_NAME" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$' ; then
+          RELEASE="release-candidate"
+        fi
+        echo "RELEASE: ${RELEASE}"
+        echo "release=${RELEASE}" >> "$GITHUB_OUTPUT"
 
-      - id: by-tag
-        run: |
-          if echo "$GITHUB_REF_NAME" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ; then
-            RELEASE="latest"
-          elif echo "$GITHUB_REF_NAME" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$' ; then
-            RELEASE="release-candidate"
-          fi
-          echo "RELEASE: ${RELEASE}"
-          echo "release=${RELEASE}" >> "$GITHUB_OUTPUT"
+    - id: latest
+      run: |
+        LATEST_RELEASE="$(
+          git -c 'versionsort.suffix=-' ls-remote -t --exit-code --refs --sort=-v:refname "https://github.com/$GITHUB_REPOSITORY" '*' |
+            awk -F/ '$NF !~ /rc|beta/ { print $NF; exit }'
+        )"
+        echo "LATEST_RELEASE: ${LATEST_RELEASE}"
+        echo "latest-release=${LATEST_RELEASE}" >> "$GITHUB_OUTPUT"
 
-      - id: latest
-        run: |
-          LATEST_RELEASE="$(
-            git -c 'versionsort.suffix=-' ls-remote -t --exit-code --refs --sort=-v:refname "https://github.com/$GITHUB_REPOSITORY" '*' |
-              awk -F/ '$NF !~ /rc|beta/ { print $NF; exit }'
-          )"
-          echo "LATEST_RELEASE: ${LATEST_RELEASE}"
-          echo "latest-release=${LATEST_RELEASE}" >> "$GITHUB_OUTPUT"
-
-      - id: docker
-        run: |
-          if [[ '${{ 'push' }}' == 'pull_request' ]]; then
-            DOCKER_TAG="pr-${{ github.event.number }}"
-          else
-            DOCKER_TAG=$GITHUB_REF_NAME
-          fi
-          # Docker tags cannot contain '/'; merge queue refs do (e.g. gh-readonly-queue/develop/pr-123-sha)
-          DOCKER_TAG="${DOCKER_TAG//\//-}"
-          echo "DOCKER_TAG: ${DOCKER_TAG}"
-          echo "gh-docker-tag=${DOCKER_TAG}" >> "$GITHUB_OUTPUT"
+    - id: docker
+      run: |
+        if [[ '${{ 'push' }}' == 'pull_request' ]]; then
+          DOCKER_TAG="pr-${{ github.event.number }}"
+        else
+          DOCKER_TAG=$GITHUB_REF_NAME
+        fi
+        # Docker tags cannot contain '/'; merge queue refs do (e.g. gh-readonly-queue/develop/pr-123-sha)
+        DOCKER_TAG="${DOCKER_TAG//\//-}"
+        echo "DOCKER_TAG: ${DOCKER_TAG}"
+        echo "gh-docker-tag=${DOCKER_TAG}" >> "$GITHUB_OUTPUT"
 
       # How much of the FIPS suite to skip:
       #   all      - build no fips images and run no fips tests
@@ -183,47 +177,124 @@ jobs:
       #   none     - skip nothing, the full fips suite runs
       # Forks skip 'all': the fips base image (rocketchat/dhi-node) sits in a private DockerHub
       # repo and secrets are unavailable to forks, so the pull could never succeed.
-      - id: fips
-        env:
-          EVENT_NAME: ${{ 'push' }}
-          BASE_REPO: ${{ github.repository }}
-          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          REPO_IS_FORK: ${{ github.event.repository.fork }}
-          HAS_FIPS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'fips') }}
-        run: |
-          if [[ "$EVENT_NAME" == 'pull_request' ]]; then
-            if [[ "$PR_HEAD_REPO" == "$BASE_REPO" ]]; then
-              IS_FORK='false'
-            else
-              IS_FORK='true'
-            fi
+    - id: fips
+      env:
+        EVENT_NAME: ${{ 'push' }}
+        BASE_REPO: ${{ github.repository }}
+        PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        REPO_IS_FORK: ${{ github.event.repository.fork }}
+        HAS_FIPS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'fips') }}
+      run: |
+        if [[ "$EVENT_NAME" == 'pull_request' ]]; then
+          if [[ "$PR_HEAD_REPO" == "$BASE_REPO" ]]; then
+            IS_FORK='false'
           else
-            IS_FORK="$REPO_IS_FORK"
+            IS_FORK='true'
           fi
+        else
+          IS_FORK="$REPO_IS_FORK"
+        fi
 
-          echo "EVENT_NAME: ${EVENT_NAME} / IS_FORK: ${IS_FORK}"
+        echo "EVENT_NAME: ${EVENT_NAME} / IS_FORK: ${IS_FORK}"
 
-          if [[ "$IS_FORK" == 'true' ]]; then
-            FIPS_SKIP='all'
-          elif [[ "$HAS_FIPS_LABEL" == 'true' ]]; then
-            FIPS_SKIP='none'
-          else
-            FIPS_SKIP='ui-suite'
+        if [[ "$IS_FORK" == 'true' ]]; then
+          FIPS_SKIP='all'
+        elif [[ "$HAS_FIPS_LABEL" == 'true' ]]; then
+          FIPS_SKIP='none'
+        else
+          FIPS_SKIP='ui-suite'
+        fi
+
+        echo "FIPS_SKIP: ${FIPS_SKIP}"
+        echo "fips-skip=${FIPS_SKIP}" >> "$GITHUB_OUTPUT"
+
+    - id: diff
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_PR_NUM: ${{ github.event.number }}
+      run: |
+        if gh pr diff --name-only --repo "${GITHUB_REPOSITORY}" "${GH_PR_NUM}" | grep -q -e .github/workflows -e .github/actions; then
+          echo "Workflow changes detected"
+          echo "actions-changed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
+
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
           fi
+        done
 
-          echo "FIPS_SKIP: ${FIPS_SKIP}"
-          echo "fips-skip=${FIPS_SKIP}" >> "$GITHUB_OUTPUT"
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
 
-      - id: diff
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_PR_NUM: ${{ github.event.number }}
-        run: |
-          if gh pr diff --name-only --repo "${GITHUB_REPOSITORY}" "${GH_PR_NUM}" | grep -q -e .github/workflows -e .github/actions; then
-            echo "Workflow changes detected"
-            echo "actions-changed=true" >> "$GITHUB_OUTPUT"
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
           fi
+        done
 
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   test-guard:
     name: ⚙️ Test Guard
     runs-on: ubuntu-24.04-arm
@@ -239,24 +310,24 @@ jobs:
       # Direct pushes (admin/revert) have no successful "Tests Done" check, so they
       # still get the full suite. continue-on-error keeps this fail-open: if the
       # API call fails, tests run.
-      - name: Check if this commit already passed tests
-        id: check
-        if: ${{ 'push' == 'push' }}
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # --paginate applies the jq filter per page, so emit names and count with
-          # wc -l to get a single integer across pages
-          passed=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" --paginate \
-            --jq '.check_runs[] | select(.name == "✅ Tests Done" and .conclusion == "success") | .name' | wc -l)
+    - name: Check if this commit already passed tests
+      id: check
+      if: ${{ 'push' == 'push' }}
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        # --paginate applies the jq filter per page, so emit names and count with
+        # wc -l to get a single integer across pages
+        passed=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" --paginate \
+          --jq '.check_runs[] | select(.name == "✅ Tests Done" and .conclusion == "success") | .name' | wc -l)
 
-          if [[ "$passed" -gt 0 ]]; then
-            echo "Tests already passed for ${{ github.sha }} in the merge queue, skipping test jobs"
-            echo "skip-tests=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip-tests=false" >> "$GITHUB_OUTPUT"
-          fi
+        if [[ "$passed" -gt 0 ]]; then
+          echo "Tests already passed for ${{ github.sha }} in the merge queue, skipping test jobs"
+          echo "skip-tests=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "skip-tests=false" >> "$GITHUB_OUTPUT"
+        fi
 
   notify-draft-services:
     name: 🚀 Notify external services - draft
@@ -264,152 +335,294 @@ jobs:
     needs: [release-versions]
     if: ${{ 'push' == 'release' }}
     steps:
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-          sparse-checkout: |
-            package.json
-          sparse-checkout-cone-mode: false
-          ref: ${{ github.ref }}
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+        sparse-checkout: |
+          package.json
+        sparse-checkout-cone-mode: false
+        ref: ${{ github.ref }}
+    - name: Register release on cloud as Draft
+      if: ${{ 'push' == 'release' }}
+      env:
+        UPDATE_TOKEN: ${{ secrets.UPDATE_TOKEN }}
+      run: |
+        REPO_VERSION=$(node -p "require('./package.json').version")
 
-      - name: Register release on cloud as Draft
-        if: ${{ 'push' == 'release' }}
-        env:
-          UPDATE_TOKEN: ${{ secrets.UPDATE_TOKEN }}
-        run: |
-          REPO_VERSION=$(node -p "require('./package.json').version")
+        if [[ '${{ 'push' }}' = 'release' ]]; then
+          GIT_TAG="${GITHUB_REF#*tags/}"
+          GIT_BRANCH=""
+          ARTIFACT_NAME="${REPO_VERSION}"
+          RC_VERSION=$GIT_TAG
 
-          if [[ '${{ 'push' }}' = 'release' ]]; then
-            GIT_TAG="${GITHUB_REF#*tags/}"
-            GIT_BRANCH=""
-            ARTIFACT_NAME="${REPO_VERSION}"
-            RC_VERSION=$GIT_TAG
+          if [[ '${{ needs.release-versions.outputs.release }}' = 'release-candidate' ]]; then
+            RC_RELEASE=candidate
+          elif [[ '${{ needs.release-versions.outputs.release }}' = 'latest' ]]; then
+            RC_RELEASE=stable
+          fi
+        else
+          GIT_TAG=""
+          GIT_BRANCH="${GITHUB_REF#*heads/}"
+          ARTIFACT_NAME="${REPO_VERSION}.$GITHUB_SHA"
+          RC_VERSION="${REPO_VERSION}"
+          RC_RELEASE=develop
+        fi;
 
-            if [[ '${{ needs.release-versions.outputs.release }}' = 'release-candidate' ]]; then
-              RC_RELEASE=candidate
-            elif [[ '${{ needs.release-versions.outputs.release }}' = 'latest' ]]; then
-              RC_RELEASE=stable
-            fi
-          else
-            GIT_TAG=""
-            GIT_BRANCH="${GITHUB_REF#*heads/}"
-            ARTIFACT_NAME="${REPO_VERSION}.$GITHUB_SHA"
-            RC_VERSION="${REPO_VERSION}"
-            RC_RELEASE=develop
-          fi;
+        curl -H "Content-Type: application/json" -H "X-Update-Token: $UPDATE_TOKEN" -d \
+            "{\"nodeVersion\": \"${{ needs.release-versions.outputs.node-version }}\", \"denoVersion\": \"${{ needs.release-versions.outputs.deno-version }}\",\"compatibleMongoVersions\": [\"8.0\"], \"commit\": \"$GITHUB_SHA\", \"tag\": \"$RC_VERSION\", \"branch\": \"$GIT_BRANCH\", \"artifactName\": \"$ARTIFACT_NAME\", \"releaseType\": \"draft\", \"draftAs\": \"$RC_RELEASE\"}" \
+            https://releases.rocket.chat/update
 
-          curl -H "Content-Type: application/json" -H "X-Update-Token: $UPDATE_TOKEN" -d \
-              "{\"nodeVersion\": \"${{ needs.release-versions.outputs.node-version }}\", \"denoVersion\": \"${{ needs.release-versions.outputs.deno-version }}\",\"compatibleMongoVersions\": [\"8.0\"], \"commit\": \"$GITHUB_SHA\", \"tag\": \"$RC_VERSION\", \"branch\": \"$GIT_BRANCH\", \"artifactName\": \"$ARTIFACT_NAME\", \"releaseType\": \"draft\", \"draftAs\": \"$RC_RELEASE\"}" \
-              https://releases.rocket.chat/update
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
 
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   packages-build:
     name: 📦 Build Packages
     needs: [release-versions]
     runs-on: ubuntu-24.04-arm
     steps:
-      - name: Cache build
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: packages-cache-build
-        with:
-          path: |
-            /tmp/RocketChat-packages-build.tar.gz
-          key: ${{ runner.arch }}-${{ runner.os }}-packages-build-${{ needs.release-versions.outputs.source-hash }}
+    - name: Cache build
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6.1.0
+      id: packages-cache-build
+      with:
+        path: |
+          /tmp/RocketChat-packages-build.tar.gz
+        key: ${{ runner.arch }}-${{ runner.os }}-packages-build-${{ needs.release-versions.outputs.source-hash }}
 
-      - name: Cache observability (packages-build)
-        run: |
-          {
-            echo "### 📦 packages-build cache"
-            echo "- **hit**: \`${{ steps.packages-cache-build.outputs.cache-hit }}\`"
-            echo "- **key**: \`${{ needs.release-versions.outputs.packages-build-cache-key }}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+    - name: Cache observability (packages-build)
+      run: |
+        {
+          echo "### 📦 packages-build cache"
+          echo "- **hit**: \`${{ steps.packages-cache-build.outputs.cache-hit }}\`"
+          echo "- **key**: \`${{ needs.release-versions.outputs.packages-build-cache-key }}\`"
+        } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Set Swap Space
-        uses: pierotofy/set-swap-space@49819abfb41bd9b44fb781159c033dba90353a7c # v1.0
-        if: steps.packages-cache-build.outputs.cache-hit != 'true'
-        with:
-          swap-size-gb: 4
+    - name: Set Swap Space
+      uses: pierotofy/set-swap-space@49819abfb41bd9b44fb781159c033dba90353a7c   # v1.0
+      if: steps.packages-cache-build.outputs.cache-hit != 'true'
+      with:
+        swap-size-gb: 4
 
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        if: steps.packages-cache-build.outputs.cache-hit != 'true'
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      if: steps.packages-cache-build.outputs.cache-hit != 'true'
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+    - name: Setup NodeJS
+      id: setup-node-packages
+      uses: ./.github/actions/setup-node
+      if: steps.packages-cache-build.outputs.cache-hit != 'true'
+      with:
+        node-version: ${{ needs.release-versions.outputs.node-version }}
+        deno-version: ${{ needs.release-versions.outputs.deno-version }}
+        cache-modules: true
+        install: true
+        NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        HARDENED_MODE: '1'
 
-      - name: Setup NodeJS
-        id: setup-node-packages
-        uses: ./.github/actions/setup-node
-        if: steps.packages-cache-build.outputs.cache-hit != 'true'
-        with:
-          node-version: ${{ needs.release-versions.outputs.node-version }}
-          deno-version: ${{ needs.release-versions.outputs.deno-version }}
-          cache-modules: true
-          install: true
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          HARDENED_MODE: '1'
+    - name: Cache observability (node_modules)
+      if: steps.packages-cache-build.outputs.cache-hit != 'true'
+      run: |
+        {
+          echo "### 🟢 node_modules cache"
+          echo "- **deno cache hit**: \`${{ steps.setup-node-packages.outputs.cache-deno-hit }}\`"
+          echo "- **node_modules size**: \`$(du -sh node_modules 2>/dev/null | cut -f1 || echo 'n/a')\`"
+        } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Cache observability (node_modules)
-        if: steps.packages-cache-build.outputs.cache-hit != 'true'
-        run: |
-          {
-            echo "### 🟢 node_modules cache"
-            echo "- **deno cache hit**: \`${{ steps.setup-node-packages.outputs.cache-deno-hit }}\`"
-            echo "- **node_modules size**: \`$(du -sh node_modules 2>/dev/null | cut -f1 || echo 'n/a')\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+    - name: Cache vite
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6.1.0
+      if: steps.packages-cache-build.outputs.cache-hit != 'true'
+      with:
+        path: ./node_modules/.vite
+        key: vite-local-cache-${{ runner.arch }}-${{ runner.os }}-${{ hashFiles('package.json') }}
+        restore-keys: |
+          vite-local-cache-${{ runner.arch }}-${{ runner.os }}-
 
-      - name: Cache vite
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: steps.packages-cache-build.outputs.cache-hit != 'true'
-        with:
-          path: ./node_modules/.vite
-          key: vite-local-cache-${{ runner.arch }}-${{ runner.os }}-${{ hashFiles('package.json') }}
-          restore-keys: |
-            vite-local-cache-${{ runner.arch }}-${{ runner.os }}-
+    - uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7   # v2.5.1
+      if: steps.packages-cache-build.outputs.cache-hit != 'true'
 
-      - uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
-        if: steps.packages-cache-build.outputs.cache-hit != 'true'
+    - name: Build Rocket.Chat Packages
+      if: steps.packages-cache-build.outputs.cache-hit != 'true'
+      run: yarn build
 
-      - name: Build Rocket.Chat Packages
-        if: steps.packages-cache-build.outputs.cache-hit != 'true'
-        run: yarn build
+    - name: Archive packages build output
+      if: steps.packages-cache-build.outputs.cache-hit != 'true'
+      run: |
+        git ls-files -oi --exclude-standard -- ':(exclude)node_modules/*' ':(exclude)**/node_modules/*' ':(exclude)**/.meteor/*' ':(exclude)**/.turbo/*' ':(exclude).turbo/*' ':(exclude)**/.yarn/*' ':(exclude).yarn/*' ':(exclude).git/*' | tar -czf /tmp/RocketChat-packages-build.tar.gz -T -
 
-      - name: Archive packages build output
-        if: steps.packages-cache-build.outputs.cache-hit != 'true'
-        run: |
-          git ls-files -oi --exclude-standard -- ':(exclude)node_modules/*' ':(exclude)**/node_modules/*' ':(exclude)**/.meteor/*' ':(exclude)**/.turbo/*' ':(exclude).turbo/*' ':(exclude)**/.yarn/*' ':(exclude).yarn/*' ':(exclude).git/*' | tar -czf /tmp/RocketChat-packages-build.tar.gz -T -
+    - name: Upload packages build artifact
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7.0.1
+      with:
+        name: packages-build
+        path: /tmp/RocketChat-packages-build.tar.gz
+        retention-days: 5
 
-      - name: Upload packages build artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: packages-build
-          path: /tmp/RocketChat-packages-build.tar.gz
-          retention-days: 5
+    - name: Store turbo build
+      if: steps.packages-cache-build.outputs.cache-hit != 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7.0.1
+      with:
+        name: turbo-build
+        path: .turbo/cache
+        overwrite: true
+        include-hidden-files: true
 
-      - name: Store turbo build
-        if: steps.packages-cache-build.outputs.cache-hit != 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: turbo-build
-          path: .turbo/cache
-          overwrite: true
-          include-hidden-files: true
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
 
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   build:
     name: 📦 Meteor Build (${{ matrix.type }})
     needs: [release-versions, packages-build]
@@ -419,32 +632,103 @@ jobs:
       fail-fast: false
       matrix:
         type:
-          - production
-          - coverage
+        - production
+        - coverage
         exclude:
-          - type: ${{ ('push' != 'release' && github.ref != 'refs/heads/develop') && 'production' || '' }}
+        - type: ${{ ('push' != 'release' && github.ref != 'refs/heads/develop') && 'production' || '' }}
 
     steps:
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+    - uses: ./.github/actions/meteor-build
+      with:
+        node-version: ${{ needs.release-versions.outputs.node-version }}
+        deno-version: ${{ needs.release-versions.outputs.deno-version }}
+        source-hash: ${{ needs.release-versions.outputs.packages-build-cache-key }}-${{ needs.release-versions.outputs.meteor-rc-cache-key }}
+        type: ${{ matrix.type }}
 
-      - uses: ./.github/actions/meteor-build
-        with:
-          node-version: ${{ needs.release-versions.outputs.node-version }}
-          deno-version: ${{ needs.release-versions.outputs.deno-version }}
-          source-hash: ${{ needs.release-versions.outputs.packages-build-cache-key }}-${{ needs.release-versions.outputs.meteor-rc-cache-key }}
-          type: ${{ matrix.type }}
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
 
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   build-gh-docker:
     # racecar: skipped on dispatch — docker registry login has no credentials on a fork (Username and password required)
     # Structural, not a weakened build: guarded here, untouched for push/PR.
@@ -461,113 +745,179 @@ jobs:
       fail-fast: false
       matrix:
         arch: [arm64, amd64]
-        service:
-          [
-            [authorization-service, queue-worker-service, ddp-streamer-service],
-            [account-service, presence-service, omnichannel-transcript-service],
-            [rocketchat],
-          ]
+        service: [[authorization-service, queue-worker-service, ddp-streamer-service], [account-service, presence-service, omnichannel-transcript-service], [rocketchat]]
         type:
-          - ${{ ('push' != 'release' && github.ref != 'refs/heads/develop') && 'coverage' || 'production' }}
-          - fips
+        - ${{ ('push' != 'release' && github.ref != 'refs/heads/develop') && 'coverage' || 'production' }}
+        - fips
         exclude:
-          - arch: arm64
-            type: fips
+        - arch: arm64
+          type: fips
           # drop the whole fips leg when there is nothing downstream to consume it (fork PRs)
-          - type: ${{ needs.release-versions.outputs.fips-skip == 'all' && 'fips' || '' }}
+        - type: ${{ needs.release-versions.outputs.fips-skip == 'all' && 'fips' || '' }}
         include:
-          - arch: amd64
-            service: [rocketchat]
-            type: coverage
-          - arch: arm64
-            service: [rocketchat]
-            type: coverage
+        - arch: amd64
+          service: [rocketchat]
+          type: coverage
+        - arch: arm64
+          service: [rocketchat]
+          type: coverage
 
     steps:
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
-
-      - uses: ./.github/actions/restore-packages
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+    - uses: ./.github/actions/restore-packages
 
       # we only build and publish the actual docker images if not a PR from a fork
-      - name: Image ${{ matrix.service[0] }}
-        uses: ./.github/actions/build-docker
-        if: github.actor != 'dependabot[bot]'
-        env:
+    - name: Image ${{ matrix.service[0] }}
+      uses: ./.github/actions/build-docker
+      if: github.actor != 'dependabot[bot]'
+      env:
           # add suffix for the extra images with coverage if building for production
-          DOCKER_TAG_SUFFIX_ROCKETCHAT: ${{ matrix.type == 'coverage' && ('push' == 'release' || github.ref == 'refs/heads/develop') && '-cov' || '' }}
-        with:
-          CR_USER: ${{ secrets.CR_USER }}
-          CR_PAT: ${{ secrets.CR_PAT }}
-          DOCKER_USER: ${{ secrets.DOCKER_USER }}
-          DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
-          deno-version: ${{ needs.release-versions.outputs.deno-version }}
-          arch: ${{ matrix.arch }}
-          service: ${{ matrix.service[0] }}
-          type: ${{ matrix.type }}
-          publish-image: ${{ github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop' }}
+        DOCKER_TAG_SUFFIX_ROCKETCHAT: ${{ matrix.type == 'coverage' && ('push' == 'release' || github.ref == 'refs/heads/develop') && '-cov' || '' }}
+      with:
+        CR_USER: ${{ secrets.CR_USER }}
+        CR_PAT: ${{ secrets.CR_PAT }}
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
+        deno-version: ${{ needs.release-versions.outputs.deno-version }}
+        arch: ${{ matrix.arch }}
+        service: ${{ matrix.service[0] }}
+        type: ${{ matrix.type }}
+        publish-image: ${{ github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop' }}
 
-      - name: Image ${{ matrix.service[1] || '"skipped"' }}
-        uses: ./.github/actions/build-docker
-        if: matrix.service[1] && github.actor != 'dependabot[bot]'
-        env:
-          DOCKER_TAG_SUFFIX_ROCKETCHAT: ${{ matrix.type == 'coverage' && '-cov' || '' }}
-        with:
-          CR_USER: ${{ secrets.CR_USER }}
-          CR_PAT: ${{ secrets.CR_PAT }}
-          DOCKER_USER: ${{ secrets.DOCKER_USER }}
-          DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
-          deno-version: ${{ needs.release-versions.outputs.deno-version }}
-          arch: ${{ matrix.arch }}
-          service: ${{ matrix.service[1] }}
-          type: ${{ matrix.type }}
-          publish-image: ${{ github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop' }}
-          setup-docker: false
+    - name: Image ${{ matrix.service[1] || '"skipped"' }}
+      uses: ./.github/actions/build-docker
+      if: matrix.service[1] && github.actor != 'dependabot[bot]'
+      env:
+        DOCKER_TAG_SUFFIX_ROCKETCHAT: ${{ matrix.type == 'coverage' && '-cov' || '' }}
+      with:
+        CR_USER: ${{ secrets.CR_USER }}
+        CR_PAT: ${{ secrets.CR_PAT }}
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
+        deno-version: ${{ needs.release-versions.outputs.deno-version }}
+        arch: ${{ matrix.arch }}
+        service: ${{ matrix.service[1] }}
+        type: ${{ matrix.type }}
+        publish-image: ${{ github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop' }}
+        setup-docker: false
 
-      - name: Image ${{ matrix.service[2] || '"skipped"' }}
-        uses: ./.github/actions/build-docker
-        if: matrix.service[2] && github.actor != 'dependabot[bot]'
-        env:
-          DOCKER_TAG_SUFFIX_ROCKETCHAT: ${{ matrix.type == 'coverage' && '-cov' || '' }}
-        with:
-          CR_USER: ${{ secrets.CR_USER }}
-          CR_PAT: ${{ secrets.CR_PAT }}
-          DOCKER_USER: ${{ secrets.DOCKER_USER }}
-          DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
-          deno-version: ${{ needs.release-versions.outputs.deno-version }}
-          arch: ${{ matrix.arch }}
-          service: ${{ matrix.service[2] }}
-          type: ${{ matrix.type }}
-          publish-image: ${{ github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop' }}
-          setup-docker: false
+    - name: Image ${{ matrix.service[2] || '"skipped"' }}
+      uses: ./.github/actions/build-docker
+      if: matrix.service[2] && github.actor != 'dependabot[bot]'
+      env:
+        DOCKER_TAG_SUFFIX_ROCKETCHAT: ${{ matrix.type == 'coverage' && '-cov' || '' }}
+      with:
+        CR_USER: ${{ secrets.CR_USER }}
+        CR_PAT: ${{ secrets.CR_PAT }}
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
+        deno-version: ${{ needs.release-versions.outputs.deno-version }}
+        arch: ${{ matrix.arch }}
+        service: ${{ matrix.service[2] }}
+        type: ${{ matrix.type }}
+        publish-image: ${{ github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop' }}
+        setup-docker: false
 
-      - name: Image ${{ matrix.service[3] || '"skipped"' }}
-        uses: ./.github/actions/build-docker
-        if: matrix.service[3] && github.actor != 'dependabot[bot]'
-        env:
-          DOCKER_TAG_SUFFIX_ROCKETCHAT: ${{ matrix.type == 'coverage' && '-cov' || '' }}
-        with:
-          CR_USER: ${{ secrets.CR_USER }}
-          CR_PAT: ${{ secrets.CR_PAT }}
-          DOCKER_USER: ${{ secrets.DOCKER_USER }}
-          DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
-          deno-version: ${{ needs.release-versions.outputs.deno-version }}
-          arch: ${{ matrix.arch }}
-          service: ${{ matrix.service[3] }}
-          type: ${{ matrix.type }}
-          publish-image: ${{ github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop' }}
-          setup-docker: false
+    - name: Image ${{ matrix.service[3] || '"skipped"' }}
+      uses: ./.github/actions/build-docker
+      if: matrix.service[3] && github.actor != 'dependabot[bot]'
+      env:
+        DOCKER_TAG_SUFFIX_ROCKETCHAT: ${{ matrix.type == 'coverage' && '-cov' || '' }}
+      with:
+        CR_USER: ${{ secrets.CR_USER }}
+        CR_PAT: ${{ secrets.CR_PAT }}
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
+        deno-version: ${{ needs.release-versions.outputs.deno-version }}
+        arch: ${{ matrix.arch }}
+        service: ${{ matrix.service[3] }}
+        type: ${{ matrix.type }}
+        publish-image: ${{ github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop' }}
+        setup-docker: false
 
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
+
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   build-gh-docker-publish:
     # racecar: skipped on dispatch — docker registry login has no credentials on a fork (Username and password required)
     # Structural, not a weakened build: guarded here, untouched for push/PR.
@@ -581,81 +931,152 @@ jobs:
       LOWERCASE_REPOSITORY: ${{ needs.release-versions.outputs.lowercase-repo }}
 
     steps:
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        if: github.actor != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop')
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-          sparse-checkout: |
-            docker-compose-ci.yml
-            docker-compose-ci.fips.yml
-          sparse-checkout-cone-mode: false
-          ref: ${{ github.ref }}
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      if: github.actor != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop')
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+        sparse-checkout: |
+          docker-compose-ci.yml
+          docker-compose-ci.fips.yml
+        sparse-checkout-cone-mode: false
+        ref: ${{ github.ref }}
+    - name: Login to GitHub Container Registry
+      if: github.actor != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop')
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f   # v4.6.0
+      with:
+        registry: ghcr.io
+        username: ${{ secrets.CR_USER }}
+        password: ${{ secrets.CR_PAT }}
 
-      - name: Login to GitHub Container Registry
-        if: github.actor != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop')
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.CR_USER }}
-          password: ${{ secrets.CR_PAT }}
+    - name: Download manifests
+      if: github.actor != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop')
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8.0.1
+      with:
+        pattern: manifests-*
+        path: /tmp/manifests
+        merge-multiple: true
 
-      - name: Download manifests
-        if: github.actor != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop')
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: manifests-*
-          path: /tmp/manifests
-          merge-multiple: true
+    - name: Create and push multi-arch manifests
+      if: github.actor != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop')
+      run: |
+        set -o xtrace
+        shopt -s nullglob
 
-      - name: Create and push multi-arch manifests
-        if: github.actor != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop')
-        run: |
-          set -o xtrace
-          shopt -s nullglob
+        for service_dir in /tmp/manifests/*; do
+          [[ -d "$service_dir" ]] || continue
+          service="$(basename "$service_dir")"
+          echo "Creating manifest for $service"
 
-          for service_dir in /tmp/manifests/*; do
-            [[ -d "$service_dir" ]] || continue
-            service="$(basename "$service_dir")"
-            echo "Creating manifest for $service"
+          # Extract digests from manifest.json files
+          # shellcheck disable=SC2016
+          mapfile -t refs < <(
+            find "$service_dir" -type f -name 'manifest.json' -print0 \
+              | xargs -0 -I{} jq -r '.Descriptor.digest as $digest | .Ref | split("@")[0] + "@" + $digest' {}
+          )
 
-            # Extract digests from manifest.json files
-            # shellcheck disable=SC2016
-            mapfile -t refs < <(
-              find "$service_dir" -type f -name 'manifest.json' -print0 \
-                | xargs -0 -I{} jq -r '.Descriptor.digest as $digest | .Ref | split("@")[0] + "@" + $digest' {}
-            )
+          echo "Digest for ${service}: ${refs[*]}"
 
-            echo "Digest for ${service}: ${refs[*]}"
+          # Get image name from docker-compose-ci.yml since rocketchat image is different from service name (rocket.chat)
+          if [ "$service" == "rocketchat-cov" ]; then
+            IMAGE=$(docker compose -f docker-compose-ci.yml config --format json 2>/dev/null | jq -r --arg s "rocketchat" '.services[$s].image')-cov
+          elif [[ "$service" == *"-fips" ]]; then
+            base_service="${service%-fips}"
+            IMAGE=$(docker compose -f docker-compose-ci.yml config --format json 2>/dev/null | jq -r --arg s "$base_service" '.services[$s].image')-fips
+          else
+            IMAGE=$(docker compose -f docker-compose-ci.yml config --format json 2>/dev/null | jq -r --arg s "$service" '.services[$s].image')
+          fi
 
-            # Get image name from docker-compose-ci.yml since rocketchat image is different from service name (rocket.chat)
-            if [ "$service" == "rocketchat-cov" ]; then
-              IMAGE=$(docker compose -f docker-compose-ci.yml config --format json 2>/dev/null | jq -r --arg s "rocketchat" '.services[$s].image')-cov
-            elif [[ "$service" == *"-fips" ]]; then
-              base_service="${service%-fips}"
-              IMAGE=$(docker compose -f docker-compose-ci.yml config --format json 2>/dev/null | jq -r --arg s "$base_service" '.services[$s].image')-fips
-            else
-              IMAGE=$(docker compose -f docker-compose-ci.yml config --format json 2>/dev/null | jq -r --arg s "$service" '.services[$s].image')
-            fi
+          echo "$IMAGE"
 
-            echo "$IMAGE"
+          docker buildx imagetools create \
+            --debug \
+            --annotation "manifest-descriptor:org.opencontainers.image.description=Build run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --tag "${IMAGE}" \
+            --tag "${IMAGE}-gha-run-${{ github.run_id }}" \
+            "${refs[@]}"
+        done
 
-            docker buildx imagetools create \
-              --debug \
-              --annotation "manifest-descriptor:org.opencontainers.image.description=Build run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-              --tag "${IMAGE}" \
-              --tag "${IMAGE}-gha-run-${{ github.run_id }}" \
-              "${refs[@]}"
-          done
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
 
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   track-image-sizes:
     name: 📦 Track Image Sizes
     needs: [build-gh-docker-publish, release-versions]
@@ -667,31 +1088,102 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+    - name: Track Docker image sizes
+      uses: ./.github/actions/docker-image-size-tracker
+      if: github.actor != 'dependabot[bot]' && (github.ref == 'refs/heads/develop' || github.event.pull_request.head.repo.full_name == github.repository)
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        ci-pat: ${{ secrets.CI_PAT }}
+        registry: ghcr.io
+        repository: ${{ needs.release-versions.outputs.lowercase-repo }}
+        tag: ${{ needs.release-versions.outputs.gh-docker-tag }}
+        baseline-tag: develop
+        size-thresholds: '{"rocketchat":{"mb":11}}'
 
-      - name: Track Docker image sizes
-        uses: ./.github/actions/docker-image-size-tracker
-        if: github.actor != 'dependabot[bot]' && (github.ref == 'refs/heads/develop' || github.event.pull_request.head.repo.full_name == github.repository)
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          ci-pat: ${{ secrets.CI_PAT }}
-          registry: ghcr.io
-          repository: ${{ needs.release-versions.outputs.lowercase-repo }}
-          tag: ${{ needs.release-versions.outputs.gh-docker-tag }}
-          baseline-tag: develop
-          size-thresholds: '{"rocketchat":{"mb":11}}'
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
 
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   actionlint:
     name: 🔎 Code Check - Action Lint
     needs: [release-versions]
@@ -700,37 +1192,108 @@ jobs:
     env:
       ACTIONLINT_VERSION: 1.7.12
     steps:
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+    - name: Get actionlint
+      shell: bash
+      run: |
+        TAR_NAME="actionlint_${ACTIONLINT_VERSION}_$(echo "${RUNNER_OS}_${RUNNER_ARCH}" | tr '[:upper:]' '[:lower:]').tar.gz"
+        echo "Downloading ${TAR_NAME}..."
+        curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${TAR_NAME}"
+        curl -fsSLo checksums.txt "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_checksums.txt"
+        grep " ${TAR_NAME}$" "checksums.txt" | sha256sum -c -
+        tar -xzf "${TAR_NAME}" actionlint
 
-      - name: Get actionlint
-        shell: bash
-        run: |
-          TAR_NAME="actionlint_${ACTIONLINT_VERSION}_$(echo "${RUNNER_OS}_${RUNNER_ARCH}" | tr '[:upper:]' '[:lower:]').tar.gz"
-          echo "Downloading ${TAR_NAME}..."
-          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${TAR_NAME}"
-          curl -fsSLo checksums.txt "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_checksums.txt"
-          grep " ${TAR_NAME}$" "checksums.txt" | sha256sum -c -
-          tar -xzf "${TAR_NAME}" actionlint
-
-      - name: Run actionlint
-        shell: bash
-        run: |
-          ./actionlint -color
+    - name: Run actionlint
+      shell: bash
+      run: |
+        ./actionlint -color
 
 
   # gating `checks` also skips every e2e test job (they all `need` it);
   # test-storybook and test-unit don't, so they carry the same gate below
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
+
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   checks:
     needs: [release-versions, packages-build, test-guard]
     if: needs.test-guard.outputs.skip-tests != 'true'
@@ -1023,237 +1586,379 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+    - name: Setup NodeJS
+      uses: ./.github/actions/setup-node
+      with:
+        node-version: ${{ needs.release-versions.outputs.node-version }}
+        deno-version: ${{ needs.release-versions.outputs.deno-version }}
+        cache-modules: true
+        install: true
 
-      - name: Setup NodeJS
-        uses: ./.github/actions/setup-node
-        with:
-          node-version: ${{ needs.release-versions.outputs.node-version }}
-          deno-version: ${{ needs.release-versions.outputs.deno-version }}
-          cache-modules: true
-          install: true
+    - uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7   # v2.5.1
 
-      - uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+    - name: Restore turbo build
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8.0.1
+      continue-on-error: true
+      with:
+        name: turbo-build
+        path: .turbo/cache
 
-      - name: Restore turbo build
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        continue-on-error: true
-        with:
-          name: turbo-build
-          path: .turbo/cache
+    - name: Build packages
+      run: yarn build
 
-      - name: Build packages
-        run: yarn build
+    - name: Login to GitHub Container Registry
+      if: (github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop') && github.actor != 'dependabot[bot]'
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f   # v4.6.0
+      with:
+        registry: ghcr.io
+        username: ${{ secrets.CR_USER }}
+        password: ${{ secrets.CR_PAT }}
 
-      - name: Login to GitHub Container Registry
-        if: (github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop') && github.actor != 'dependabot[bot]'
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.CR_USER }}
-          password: ${{ secrets.CR_PAT }}
-
-      - name: Configure /etc/hosts for federation services
-        run: |
-          sudo -- sh -c "echo '127.0.0.1 hs1' >> /etc/hosts"
-          sudo -- sh -c "echo '127.0.0.1 rc1' >> /etc/hosts"
+    - name: Configure /etc/hosts for federation services
+      run: |
+        sudo -- sh -c "echo '127.0.0.1 hs1' >> /etc/hosts"
+        sudo -- sh -c "echo '127.0.0.1 rc1' >> /etc/hosts"
 
       # Download Docker images from build artifacts
-      - name: Download Docker images
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        if: github.event.pull_request.head.repo.full_name != github.repository && 'push' != 'release' && github.ref != 'refs/heads/develop'
-        with:
-          pattern: 'docker-image-rocketchat-amd64-coverage'
-          path: /tmp/docker-images
-          merge-multiple: true
+    - name: Download Docker images
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8.0.1
+      if: github.event.pull_request.head.repo.full_name != github.repository && 'push' != 'release' && github.ref != 'refs/heads/develop'
+      with:
+        pattern: 'docker-image-rocketchat-amd64-coverage'
+        path: /tmp/docker-images
+        merge-multiple: true
 
       # Load Docker images
-      - name: Load Docker images
-        if: github.event.pull_request.head.repo.full_name != github.repository && 'push' != 'release' && github.ref != 'refs/heads/develop'
-        shell: bash
-        run: |
-          set -o xtrace
+    - name: Load Docker images
+      if: github.event.pull_request.head.repo.full_name != github.repository && 'push' != 'release' && github.ref != 'refs/heads/develop'
+      shell: bash
+      run: |
+        set -o xtrace
 
-          # Load all downloaded images
-          for image_file in /tmp/docker-images/*.tar; do
-            if [ -f "$image_file" ]; then
-              echo "Loading image from $image_file"
-              docker load -i "$image_file"
-              rm "$image_file"
-            fi
-          done
+        # Load all downloaded images
+        for image_file in /tmp/docker-images/*.tar; do
+          if [ -f "$image_file" ]; then
+            echo "Loading image from $image_file"
+            docker load -i "$image_file"
+            rm "$image_file"
+          fi
+        done
 
-          # List loaded images
-          docker images
+        # List loaded images
+        docker images
 
-      - name: Start federation services
-        working-directory: ./ee/packages/federation-matrix
-        env:
-          ROCKETCHAT_IMAGE: ghcr.io/${{ needs.release-versions.outputs.lowercase-repo }}/rocket.chat:${{ needs.release-versions.outputs.gh-docker-tag }}-amd64
-          ENTERPRISE_LICENSE_RC1: ZAikY+LLaal7mT6RNYxpyWEmMQyucrl50/7pYBXqHczc90j+RLwF+T0xuCT2pIpKMC5DxcZ1TtkV6MYJk5whrwmap+mQ0FV+VpILJlL0i4T21K4vMfzZXTWm/pzcAy2fMTUNH+mUA9HTBD6lYYh40KnbGXPAd80VbZk0MO/WbWBm2dOT0YCwfvlRyurRqkDAQrftLaffzCNUsMKk0fh+MKs73UDHZQDp1yvs7WoGpPu5ZVi5mTBOt3ZKVz5KjGfClLwJptFPmW1w6nKelAiJBDPpjcX1ylfjxpnBoixko7uN52zlyaeoAYwfRcdDLnZ8k0Ou6tui/vTQUXjGIjHw2AhMaKwonn4E9LYpuA1KEXt08qJL5J3ZtjSCV1T+A9Z3zFhhLgp5dxP/PPUbxDn/P8XKp7nXM9duIfcCMlnea7V8ixEyCHwwvKQaXVVidcsUGtB8CwS0GlsAEBLOzqMehuQUK2rdQ4WgEz3AYveikeVvSzgBHvyXsxssWAThc0Mht0eEJqdDhUB2QeZ2WmPsaSSD639Z4WgjSUoR0zh8bfqepH+2XRcUryXe2yN+iU+3POzi9wfg0k65MxXT8pBg3PD5RHnR8oflEP0tpZts33JiBhYRxX3MKplAFm4dMuphTsDJTh+e534pT7IPuZF79QSVaLEWZfVVVb7nGFtmMwA=
-          QASE_TESTOPS_JEST_API_TOKEN: ${{ secrets.QASE_TESTOPS_JEST_API_TOKEN }}
-          PR_NUMBER: ${{ github.event.number }}
-        run: yarn test:integration --start-containers-only --image "${ROCKETCHAT_IMAGE}"
+    - name: Start federation services
+      working-directory: ./ee/packages/federation-matrix
+      env:
+        ROCKETCHAT_IMAGE: ghcr.io/${{ needs.release-versions.outputs.lowercase-repo }}/rocket.chat:${{ needs.release-versions.outputs.gh-docker-tag }}-amd64
+        ENTERPRISE_LICENSE_RC1: ZAikY+LLaal7mT6RNYxpyWEmMQyucrl50/7pYBXqHczc90j+RLwF+T0xuCT2pIpKMC5DxcZ1TtkV6MYJk5whrwmap+mQ0FV+VpILJlL0i4T21K4vMfzZXTWm/pzcAy2fMTUNH+mUA9HTBD6lYYh40KnbGXPAd80VbZk0MO/WbWBm2dOT0YCwfvlRyurRqkDAQrftLaffzCNUsMKk0fh+MKs73UDHZQDp1yvs7WoGpPu5ZVi5mTBOt3ZKVz5KjGfClLwJptFPmW1w6nKelAiJBDPpjcX1ylfjxpnBoixko7uN52zlyaeoAYwfRcdDLnZ8k0Ou6tui/vTQUXjGIjHw2AhMaKwonn4E9LYpuA1KEXt08qJL5J3ZtjSCV1T+A9Z3zFhhLgp5dxP/PPUbxDn/P8XKp7nXM9duIfcCMlnea7V8ixEyCHwwvKQaXVVidcsUGtB8CwS0GlsAEBLOzqMehuQUK2rdQ4WgEz3AYveikeVvSzgBHvyXsxssWAThc0Mht0eEJqdDhUB2QeZ2WmPsaSSD639Z4WgjSUoR0zh8bfqepH+2XRcUryXe2yN+iU+3POzi9wfg0k65MxXT8pBg3PD5RHnR8oflEP0tpZts33JiBhYRxX3MKplAFm4dMuphTsDJTh+e534pT7IPuZF79QSVaLEWZfVVVb7nGFtmMwA=
+        QASE_TESTOPS_JEST_API_TOKEN: ${{ secrets.QASE_TESTOPS_JEST_API_TOKEN }}
+        PR_NUMBER: ${{ github.event.number }}
+      run: yarn test:integration --start-containers-only --image "${ROCKETCHAT_IMAGE}"
 
-      - name: Run federation integration tests
-        working-directory: ./ee/packages/federation-matrix
-        env:
-          QASE_TESTOPS_JEST_API_TOKEN: ${{ secrets.QASE_TESTOPS_JEST_API_TOKEN }}
-          PR_NUMBER: ${{ github.event.number }}
-        run: yarn test:integration --ci
+    - name: Run federation integration tests
+      working-directory: ./ee/packages/federation-matrix
+      env:
+        QASE_TESTOPS_JEST_API_TOKEN: ${{ secrets.QASE_TESTOPS_JEST_API_TOKEN }}
+        PR_NUMBER: ${{ github.event.number }}
+      run: yarn test:integration --ci
 
-      - name: Show federation integration tests logs
-        if: failure()
-        working-directory: ./ee/packages/federation-matrix
-        run: yarn test:integration --logs
+    - name: Show federation integration tests logs
+      if: failure()
+      working-directory: ./ee/packages/federation-matrix
+      run: yarn test:integration --logs
 
-      - name: Show mongo logs if tests failed
-        if: failure()
-        working-directory: ./ee/packages/federation-matrix
-        run: docker compose -f docker-compose.test.yml logs mongo
+    - name: Show mongo logs if tests failed
+      if: failure()
+      working-directory: ./ee/packages/federation-matrix
+      run: docker compose -f docker-compose.test.yml logs mongo
 
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
+
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   report-coverage:
     name: 📊 Report Coverage
     runs-on: ubuntu-24.04
     needs: [release-versions, test-api-ee, test-api-livechat-ee, test-ui-ee]
 
     steps:
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+    - name: Use Node.js
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020   # v7.0.0
+      with:
+        node-version: ${{ needs.release-versions.outputs.node-version }}
 
-      - name: Use Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ needs.release-versions.outputs.node-version }}
+    - name: Restore coverage folder
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8.0.1
+      with:
+        pattern: coverage-*
+        path: /tmp/coverage
+        merge-multiple: true
 
-      - name: Restore coverage folder
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: coverage-*
-          path: /tmp/coverage
-          merge-multiple: true
+    - name: Generate lcov report
+      run: |
+        set -o xtrace
 
-      - name: Generate lcov report
-        run: |
-          set -o xtrace
+        npx nyc report --reporter=lcovonly --report-dir=/tmp/coverage_report/api --temp-dir=/tmp/coverage/api
+        npx nyc report --reporter=lcovonly --report-dir=/tmp/coverage_report/ui --temp-dir=/tmp/coverage/ui
 
-          npx nyc report --reporter=lcovonly --report-dir=/tmp/coverage_report/api --temp-dir=/tmp/coverage/api
-          npx nyc report --reporter=lcovonly --report-dir=/tmp/coverage_report/ui --temp-dir=/tmp/coverage/ui
+    - name: Store coverage-reports
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7.0.1
+      with:
+        name: reports-coverage
+        path: /tmp/coverage_report
+        include-hidden-files: true
 
-      - name: Store coverage-reports
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: reports-coverage
-          path: /tmp/coverage_report
-          include-hidden-files: true
-
-      - name: Report API coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-        with:
-          files: /tmp/coverage_report/api/lcov.info
-          working-directory: .
-          flags: e2e-api
-          verbose: true
-          token: ${{ secrets.CODECOV_TOKEN }}
+    - name: Report API coverage
+      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f   # v7.0.0
+      with:
+        files: /tmp/coverage_report/api/lcov.info
+        working-directory: .
+        flags: e2e-api
+        verbose: true
+        token: ${{ secrets.CODECOV_TOKEN }}
           # tests don't re-run on the develop push, so the merge queue run (same SHA
           # that lands on develop) provides the develop coverage baseline
-          override_branch: ${{ 'push' == 'merge_group' && github.event.merge_group.base_ref == 'refs/heads/develop' && 'develop' || '' }}
+        override_branch: ${{ 'push' == 'merge_group' && github.event.merge_group.base_ref == 'refs/heads/develop' && 'develop' || '' }}
 
-      - name: Report UI coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-        with:
-          files: /tmp/coverage_report/ui/lcov.info
-          working-directory: .
-          flags: e2e
-          verbose: true
-          token: ${{ secrets.CODECOV_TOKEN }}
-          override_branch: ${{ 'push' == 'merge_group' && github.event.merge_group.base_ref == 'refs/heads/develop' && 'develop' || '' }}
+    - name: Report UI coverage
+      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f   # v7.0.0
+      with:
+        files: /tmp/coverage_report/ui/lcov.info
+        working-directory: .
+        flags: e2e
+        verbose: true
+        token: ${{ secrets.CODECOV_TOKEN }}
+        override_branch: ${{ 'push' == 'merge_group' && github.event.merge_group.base_ref == 'refs/heads/develop' && 'develop' || '' }}
 
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
+
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   tests-done:
     name: ✅ Tests Done
     runs-on: ubuntu-24.04-arm
     needs: [test-guard, checks, test-unit, test-api, test-ui, test-api-ee, test-ui-ee, test-api-livechat, test-api-livechat-ee, test-api-apps-deno-ee, test-api-fips, test-api-livechat-fips, test-ui-fips, test-federation-matrix]
     if: always() && needs.test-guard.outputs.skip-tests != 'true'
     steps:
-      - name: Test finish aggregation
-        run: |
-          if [[ '${{ needs.checks.result }}' != 'success' ]]; then
-            exit 1
-          fi
+    - name: Test finish aggregation
+      run: |
+        if [[ '${{ needs.checks.result }}' != 'success' ]]; then
+          exit 1
+        fi
 
-          if [[ '${{ needs.test-unit.result }}' != 'success' ]]; then
-            exit 1
-          fi
+        if [[ '${{ needs.test-unit.result }}' != 'success' ]]; then
+          exit 1
+        fi
 
-          if [[ '${{ needs.test-api.result }}' != 'success' ]]; then
-            exit 1
-          fi
+        if [[ '${{ needs.test-api.result }}' != 'success' ]]; then
+          exit 1
+        fi
 
-          if [[ '${{ needs.test-ui.result }}' != 'success' ]]; then
-            exit 1
-          fi
+        if [[ '${{ needs.test-ui.result }}' != 'success' ]]; then
+          exit 1
+        fi
 
-          if [[ '${{ needs.test-api-ee.result }}' != 'success' ]]; then
-            exit 1
-          fi
+        if [[ '${{ needs.test-api-ee.result }}' != 'success' ]]; then
+          exit 1
+        fi
 
-          if [[ '${{ needs.test-ui-ee.result }}' != 'success' ]]; then
-            exit 1
-          fi
+        if [[ '${{ needs.test-ui-ee.result }}' != 'success' ]]; then
+          exit 1
+        fi
 
-          if [[ '${{ needs.test-api-livechat.result }}' != 'success' ]]; then
-            exit 1
-          fi
+        if [[ '${{ needs.test-api-livechat.result }}' != 'success' ]]; then
+          exit 1
+        fi
 
-          if [[ '${{ needs.test-api-livechat-ee.result }}' != 'success' ]]; then
-            exit 1
-          fi
+        if [[ '${{ needs.test-api-livechat-ee.result }}' != 'success' ]]; then
+          exit 1
+        fi
 
-          if [[ '${{ needs.test-api-apps-deno-ee.result }}' != 'success' ]]; then
-            exit 1
-          fi
+        if [[ '${{ needs.test-api-apps-deno-ee.result }}' != 'success' ]]; then
+          exit 1
+        fi
 
-          # the fips jobs are gated by the release-versions 'fips-skip' output, so any of them
-          # can legitimately report 'skipped' (always on fork PRs, and test-ui-fips unless the
-          # PR carries the 'fips' label)
-          if [[ '${{ needs.test-api-fips.result }}' != 'success' && '${{ needs.test-api-fips.result }}' != 'skipped' ]]; then
-            exit 1
-          fi
+        # the fips jobs are gated by the release-versions 'fips-skip' output, so any of them
+        # can legitimately report 'skipped' (always on fork PRs, and test-ui-fips unless the
+        # PR carries the 'fips' label)
+        if [[ '${{ needs.test-api-fips.result }}' != 'success' && '${{ needs.test-api-fips.result }}' != 'skipped' ]]; then
+          exit 1
+        fi
 
-          if [[ '${{ needs.test-api-livechat-fips.result }}' != 'success' && '${{ needs.test-api-livechat-fips.result }}' != 'skipped' ]]; then
-            exit 1
-          fi
+        if [[ '${{ needs.test-api-livechat-fips.result }}' != 'success' && '${{ needs.test-api-livechat-fips.result }}' != 'skipped' ]]; then
+          exit 1
+        fi
 
-          if [[ '${{ needs.test-ui-fips.result }}' != 'success' && '${{ needs.test-ui-fips.result }}' != 'skipped' ]]; then
-            exit 1
-          fi
+        if [[ '${{ needs.test-ui-fips.result }}' != 'success' && '${{ needs.test-ui-fips.result }}' != 'skipped' ]]; then
+          exit 1
+        fi
 
-          if [[ '${{ needs.test-federation-matrix.result }}' != 'success' ]]; then
-            exit 1
-          fi
+        if [[ '${{ needs.test-federation-matrix.result }}' != 'success' ]]; then
+          exit 1
+        fi
 
-          echo finished
+        echo finished
 
   deploy:
     name: 🚀 Publish build assets
@@ -1262,61 +1967,132 @@ jobs:
     needs: [build-gh-docker-publish, release-versions]
 
     steps:
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-          sparse-checkout: |
-            package.json
-          sparse-checkout-cone-mode: false
-          ref: ${{ github.ref }}
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+        sparse-checkout: |
+          package.json
+        sparse-checkout-cone-mode: false
+        ref: ${{ github.ref }}
+    - name: Restore build
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8.0.1
+      with:
+        name: build-production
+        path: /tmp/build
 
-      - name: Restore build
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: build-production
-          path: /tmp/build
+    - name: Publish assets
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: 'us-east-1'
+        GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
+      run: |
+        REPO_VERSION=$(node -p "require('./package.json').version")
 
-      - name: Publish assets
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: 'us-east-1'
-          GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
-        run: |
-          REPO_VERSION=$(node -p "require('./package.json').version")
+        if [[ "${{ 'push' }}" = 'release' ]]; then
+          ARTIFACT_NAME="${REPO_VERSION}"
+        else
+          ARTIFACT_NAME="${REPO_VERSION}.$GITHUB_SHA"
+        fi;
 
-          if [[ "${{ 'push' }}" = 'release' ]]; then
-            ARTIFACT_NAME="${REPO_VERSION}"
-          else
-            ARTIFACT_NAME="${REPO_VERSION}.$GITHUB_SHA"
-          fi;
+        ROCKET_DEPLOY_DIR="/tmp/deploy"
+        FILENAME="$ROCKET_DEPLOY_DIR/rocket.chat-$ARTIFACT_NAME.tgz"
 
-          ROCKET_DEPLOY_DIR="/tmp/deploy"
-          FILENAME="$ROCKET_DEPLOY_DIR/rocket.chat-$ARTIFACT_NAME.tgz"
+        aws s3 cp s3://rocketchat/sign.key.gpg .github/sign.key.gpg
 
-          aws s3 cp s3://rocketchat/sign.key.gpg .github/sign.key.gpg
+        mkdir -p "$ROCKET_DEPLOY_DIR"
 
-          mkdir -p "$ROCKET_DEPLOY_DIR"
+        cp .github/sign.key.gpg /tmp
+        gpg --yes --batch --passphrase="$GPG_PASSWORD" /tmp/sign.key.gpg
+        gpg --allow-secret-key-import --import /tmp/sign.key
+        rm /tmp/sign.key
 
-          cp .github/sign.key.gpg /tmp
-          gpg --yes --batch --passphrase="$GPG_PASSWORD" /tmp/sign.key.gpg
-          gpg --allow-secret-key-import --import /tmp/sign.key
-          rm /tmp/sign.key
+        ln -s /tmp/build/Rocket.Chat.tar.gz "$FILENAME"
+        gpg --armor --detach-sign "$FILENAME"
 
-          ln -s /tmp/build/Rocket.Chat.tar.gz "$FILENAME"
-          gpg --armor --detach-sign "$FILENAME"
+        aws s3 cp "$ROCKET_DEPLOY_DIR/" s3://download.rocket.chat/build/ --recursive
 
-          aws s3 cp "$ROCKET_DEPLOY_DIR/" s3://download.rocket.chat/build/ --recursive
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
 
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   docker-image-publish:
     name: 🚀 Publish Docker Images (DockerHub)
     runs-on: ubuntu-24.04-arm
@@ -1327,197 +2103,339 @@ jobs:
       LOWERCASE_REPOSITORY: ${{ needs.release-versions.outputs.lowercase-repo }}
 
     steps:
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-          sparse-checkout: |
-            docker-compose-ci.yml
-            docker-compose-ci.fips.yml
-          sparse-checkout-cone-mode: false
-          ref: ${{ github.ref }}
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+        sparse-checkout: |
+          docker-compose-ci.yml
+          docker-compose-ci.fips.yml
+        sparse-checkout-cone-mode: false
+        ref: ${{ github.ref }}
+    - name: Login to DockerHub
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f   # v4.6.0
+      with:
+        username: ${{ secrets.DOCKER_USER }}
+        password: ${{ secrets.DOCKER_PASS }}
 
-      - name: Login to DockerHub
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          username: ${{ secrets.DOCKER_USER }}
-          password: ${{ secrets.DOCKER_PASS }}
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f   # v4.6.0
+      with:
+        registry: ghcr.io
+        username: ${{ secrets.CR_USER }}
+        password: ${{ secrets.CR_PAT }}
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.CR_USER }}
-          password: ${{ secrets.CR_PAT }}
+    - name: Download manifests
+      if: github.actor != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop')
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c   # v8.0.1
+      with:
+        pattern: manifests-*
+        path: /tmp/manifests
+        merge-multiple: true
 
-      - name: Download manifests
-        if: github.actor != 'dependabot[bot]' && (github.event.pull_request.head.repo.full_name == github.repository || 'push' == 'release' || github.ref == 'refs/heads/develop')
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: manifests-*
-          path: /tmp/manifests
-          merge-multiple: true
+    - name: Publish Docker images
+      run: |
+        set -euo pipefail
+        set -o xtrace
+        shopt -s nullglob
 
-      - name: Publish Docker images
-        run: |
-          set -euo pipefail
-          set -o xtrace
-          shopt -s nullglob
+        # sudo apt-get update -y
+        # sudo apt-get install -y skopeo
 
-          # sudo apt-get update -y
-          # sudo apt-get install -y skopeo
+        # 'develop' or 'tag'
+        DOCKER_TAG=$GITHUB_REF_NAME
+        DOCKER_TAG="${DOCKER_TAG//\//-}"
 
-          # 'develop' or 'tag'
-          DOCKER_TAG=$GITHUB_REF_NAME
-          DOCKER_TAG="${DOCKER_TAG//\//-}"
+        declare -a TAGS=()
 
-          declare -a TAGS=()
+        # tag specific tag version
+        TAGS+=("$DOCKER_TAG")
 
-          # tag specific tag version
-          TAGS+=("$DOCKER_TAG")
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          RELEASE="${{ needs.release-versions.outputs.release }}"
 
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            RELEASE="${{ needs.release-versions.outputs.release }}"
+          echo "RELEASE: $RELEASE"
 
-            echo "RELEASE: $RELEASE"
-
-            if [[ "$RELEASE" == 'latest' ]]; then
-              if [[ '${{ needs.release-versions.outputs.latest-release }}' == "$GITHUB_REF_NAME" ]]; then
-                TAGS+=("$RELEASE")
-              fi
-            else
+          if [[ "$RELEASE" == 'latest' ]]; then
+            if [[ '${{ needs.release-versions.outputs.latest-release }}' == "$GITHUB_REF_NAME" ]]; then
               TAGS+=("$RELEASE")
             fi
+          else
+            TAGS+=("$RELEASE")
+          fi
+        fi
+
+        # commit hash
+        COMMIT_SHA="sha-${GITHUB_SHA:0:7}"
+        echo "COMMIT_SHA: ${COMMIT_SHA}"
+        TAGS+=("${COMMIT_SHA}")
+
+        echo "Tags: ${TAGS[*]}"
+
+        # get first tag as primary
+        PRIMARY="${TAGS[0]}"
+
+        for service_dir in /tmp/manifests/*; do
+          [[ -d "$service_dir" ]] || continue
+          service="$(basename "$service_dir")"
+
+          if [ "$service" == "rocketchat-cov" ]; then
+            continue
           fi
 
-          # commit hash
-          COMMIT_SHA="sha-${GITHUB_SHA:0:7}"
-          echo "COMMIT_SHA: ${COMMIT_SHA}"
-          TAGS+=("${COMMIT_SHA}")
+          echo "Promoting $service"
 
-          echo "Tags: ${TAGS[*]}"
+          # FIPS images publish to the same repo as their base service, distinguished by a
+          # '-fips' tag suffix (matching GHCR), not a separate '-fips' repository.
+          # Get image name from docker-compose-ci.yml since rocketchat image is different from service name (rocket.chat)
+          TAG_SUFFIX=''
+          if [[ "$service" == *"-fips" ]]; then
+            base_service="${service%-fips}"
+            TAG_SUFFIX='-fips'
+            SRC=$(docker compose -f docker-compose-ci.yml -f docker-compose-ci.fips.yml config --format json 2>/dev/null | jq -r --arg s "$base_service" '.services[$s].image')
+          else
+            base_service="$service"
+            SRC=$(docker compose -f docker-compose-ci.yml config --format json 2>/dev/null | jq -r --arg s "$service" '.services[$s].image')
+          fi
 
-          # get first tag as primary
-          PRIMARY="${TAGS[0]}"
+          if [[ "${base_service}" == 'rocketchat' ]]; then
+            IMAGE_NAME="${{ needs.release-versions.outputs.lowercase-repo }}/rocket.chat"
+          else
+            IMAGE_NAME="${{ needs.release-versions.outputs.lowercase-repo }}/${base_service}"
+          fi
 
-          for service_dir in /tmp/manifests/*; do
-            [[ -d "$service_dir" ]] || continue
-            service="$(basename "$service_dir")"
+          DEST_REPO="docker.io/${IMAGE_NAME}"
 
-            if [ "$service" == "rocketchat-cov" ]; then
-              continue
-            fi
+          echo "Copying $SRC to ${DEST_REPO}:${PRIMARY}${TAG_SUFFIX}"
+          skopeo copy --all \
+            "docker://${SRC}" \
+            "docker://${DEST_REPO}:${PRIMARY}${TAG_SUFFIX}"
 
-            echo "Promoting $service"
+          # copy additional tags
+          if (( ${#TAGS[@]} > 1 )); then
+            for t in "${TAGS[@]:1}"; do
+              echo "Copying $SRC to ${DEST_REPO}:${t}${TAG_SUFFIX}"
+              skopeo copy --all \
+                "docker://${SRC}" \
+                "docker://${DEST_REPO}:${t}${TAG_SUFFIX}"
+            done
+          fi
 
-            # FIPS images publish to the same repo as their base service, distinguished by a
-            # '-fips' tag suffix (matching GHCR), not a separate '-fips' repository.
-            # Get image name from docker-compose-ci.yml since rocketchat image is different from service name (rocket.chat)
-            TAG_SUFFIX=''
-            if [[ "$service" == *"-fips" ]]; then
-              base_service="${service%-fips}"
-              TAG_SUFFIX='-fips'
-              SRC=$(docker compose -f docker-compose-ci.yml -f docker-compose-ci.fips.yml config --format json 2>/dev/null | jq -r --arg s "$base_service" '.services[$s].image')
-            else
-              base_service="$service"
-              SRC=$(docker compose -f docker-compose-ci.yml config --format json 2>/dev/null | jq -r --arg s "$service" '.services[$s].image')
-            fi
+        done
 
-            if [[ "${base_service}" == 'rocketchat' ]]; then
-              IMAGE_NAME="${{ needs.release-versions.outputs.lowercase-repo }}/rocket.chat"
-            else
-              IMAGE_NAME="${{ needs.release-versions.outputs.lowercase-repo }}/${base_service}"
-            fi
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
 
-            DEST_REPO="docker.io/${IMAGE_NAME}"
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
 
-            echo "Copying $SRC to ${DEST_REPO}:${PRIMARY}${TAG_SUFFIX}"
-            skopeo copy --all \
-              "docker://${SRC}" \
-              "docker://${DEST_REPO}:${PRIMARY}${TAG_SUFFIX}"
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
 
-            # copy additional tags
-            if (( ${#TAGS[@]} > 1 )); then
-              for t in "${TAGS[@]:1}"; do
-                echo "Copying $SRC to ${DEST_REPO}:${t}${TAG_SUFFIX}"
-                skopeo copy --all \
-                  "docker://${SRC}" \
-                  "docker://${DEST_REPO}:${t}${TAG_SUFFIX}"
-              done
-            fi
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
 
-          done
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
 
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   notify-services:
     name: 🚀 Notify external services
     runs-on: ubuntu-24.04-arm
     needs:
-      - docker-image-publish
-      - release-versions
+    - docker-image-publish
+    - release-versions
     steps:
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-          sparse-checkout: |
-            package.json
-          sparse-checkout-cone-mode: false
-          ref: ${{ github.ref }}
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+        sparse-checkout: |
+          package.json
+        sparse-checkout-cone-mode: false
+        ref: ${{ github.ref }}
+    - name: Releases service
+      env:
+        UPDATE_TOKEN: ${{ secrets.UPDATE_TOKEN }}
+      run: |
+        REPO_VERSION=$(node -p "require('./package.json').version")
 
-      - name: Releases service
-        env:
-          UPDATE_TOKEN: ${{ secrets.UPDATE_TOKEN }}
-        run: |
-          REPO_VERSION=$(node -p "require('./package.json').version")
+        if [[ '${{ 'push' }}' = 'release' ]]; then
+          GIT_TAG="${GITHUB_REF#*tags/}"
+          GIT_BRANCH=""
+          ARTIFACT_NAME="${REPO_VERSION}"
+          RC_VERSION=$GIT_TAG
 
-          if [[ '${{ 'push' }}' = 'release' ]]; then
-            GIT_TAG="${GITHUB_REF#*tags/}"
-            GIT_BRANCH=""
-            ARTIFACT_NAME="${REPO_VERSION}"
-            RC_VERSION=$GIT_TAG
+          if [[ '${{ needs.release-versions.outputs.release }}' = 'release-candidate' ]]; then
+            RC_RELEASE=candidate
+          elif [[ '${{ needs.release-versions.outputs.release }}' = 'latest' ]]; then
+            RC_RELEASE=stable
+          fi
+        else
+          GIT_TAG=""
+          GIT_BRANCH="${GITHUB_REF#*heads/}"
+          ARTIFACT_NAME="${REPO_VERSION}.$GITHUB_SHA"
+          RC_VERSION="${REPO_VERSION}"
+          RC_RELEASE=develop
+        fi;
 
-            if [[ '${{ needs.release-versions.outputs.release }}' = 'release-candidate' ]]; then
-              RC_RELEASE=candidate
-            elif [[ '${{ needs.release-versions.outputs.release }}' = 'latest' ]]; then
-              RC_RELEASE=stable
-            fi
-          else
-            GIT_TAG=""
-            GIT_BRANCH="${GITHUB_REF#*heads/}"
-            ARTIFACT_NAME="${REPO_VERSION}.$GITHUB_SHA"
-            RC_VERSION="${REPO_VERSION}"
-            RC_RELEASE=develop
-          fi;
+        curl -H "Content-Type: application/json" -H "X-Update-Token: $UPDATE_TOKEN" -d \
+            "{\"nodeVersion\": \"${{ needs.release-versions.outputs.node-version }}\", \"denoVersion\": \"${{ needs.release-versions.outputs.deno-version }}\", \"compatibleMongoVersions\": [\"8.0\"], \"commit\": \"$GITHUB_SHA\", \"tag\": \"$RC_VERSION\", \"branch\": \"$GIT_BRANCH\", \"artifactName\": \"$ARTIFACT_NAME\", \"releaseType\": \"$RC_RELEASE\"}" \
+            https://releases.rocket.chat/update
 
-          curl -H "Content-Type: application/json" -H "X-Update-Token: $UPDATE_TOKEN" -d \
-              "{\"nodeVersion\": \"${{ needs.release-versions.outputs.node-version }}\", \"denoVersion\": \"${{ needs.release-versions.outputs.deno-version }}\", \"compatibleMongoVersions\": [\"8.0\"], \"commit\": \"$GITHUB_SHA\", \"tag\": \"$RC_VERSION\", \"branch\": \"$GIT_BRANCH\", \"artifactName\": \"$ARTIFACT_NAME\", \"releaseType\": \"$RC_RELEASE\"}" \
-              https://releases.rocket.chat/update
+        # Makes build fail if the release isn't there
+        curl --fail "https://releases.rocket.chat/$RC_VERSION/info"
 
-          # Makes build fail if the release isn't there
-          curl --fail "https://releases.rocket.chat/$RC_VERSION/info"
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
 
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
   docs-update:
     name: Update Version Durability
 
     if: ${{ 'push' == 'release' }}
     needs:
-      - docker-image-publish
+    - docker-image-publish
 
     uses: ./.github/workflows/update-version-durability.yml
     with:
